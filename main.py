@@ -2,11 +2,12 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import cv2
 import numpy as np
+import base64
 import os
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # This enables CORS for all routes, allowing requests from any domain
 
 # Load the trained k-NN model
 model_filename = "knn_model.xml"
@@ -36,13 +37,13 @@ def process_image(image_file):
     # Resize to 28x28 while maintaining aspect ratio
     processed_img = resize_with_aspect_ratio(img_bin, (28, 28))
 
-    # Flatten the image to a 1D array
-    processed_img = processed_img.flatten().astype(np.float32)
+    # Flatten the image to a 1D array (used for prediction)
+    processed_img_for_prediction = processed_img.flatten().astype(np.float32)
     
     # Normalize the image
-    processed_img = processed_img / 255.0
+    processed_img_for_prediction = processed_img_for_prediction / 255.0
     
-    return processed_img
+    return processed_img, processed_img_for_prediction
 
 # Function to resize image with aspect ratio
 def resize_with_aspect_ratio(image, target_size=(28, 28)):
@@ -72,16 +73,20 @@ def predict():
         if file.filename == '':
             return jsonify({"error": "No selected file"}), 400
 
-        # Process the image
-        processed_img = process_image(file)
+        # Process the image and get the processed image for prediction
+        processed_img, processed_img_for_prediction = process_image(file)
 
         # Reshape and make prediction
-        processed_img = processed_img.reshape(1, -1)  # Reshape to match the input shape
-        ret, results, neighbors, dist = knn.findNearest(processed_img, k=5)
+        processed_img_for_prediction = processed_img_for_prediction.reshape(1, -1)  # Reshape to match the input shape
+        ret, results, neighbors, dist = knn.findNearest(processed_img_for_prediction, k=5)
 
         predicted_digit = int(results[0][0])
 
-        return jsonify({"prediction": predicted_digit})
+        # Convert the processed image to a base64 encoded string (2D image, not the flattened 1D array)
+        _, buffer = cv2.imencode('.png', processed_img)  # Use the original processed image here
+        img_str = base64.b64encode(buffer).decode('utf-8')
+
+        return jsonify({"prediction": predicted_digit, "processed_image": img_str})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
