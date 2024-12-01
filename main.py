@@ -3,7 +3,6 @@ from flask_cors import CORS
 import cv2
 import numpy as np
 import base64
-import pickle
 import os
 
 #hello
@@ -11,33 +10,9 @@ import os
 app = Flask(__name__)
 CORS(app)  # This enables CORS for all routes, allowing requests from any domain
 
-# Load the trained MLP model
-model_filename = "mlp_model.pkl"
-with open(model_filename, 'rb') as f:
-    model = pickle.load(f)
-
-weights_1 = model['weights_1']
-biases_1 = model['biases_1']
-weights_2 = model['weights_2']
-biases_2 = model['biases_2']
-weights_3 = model['weights_3']
-biases_3 = model['biases_3']
-
-# Leaky ReLU activation function
-def leaky_relu(x, alpha=0.01):
-    return np.where(x > 0, x, alpha * x)
-
-# Softmax activation function
-def softmax(x):
-    exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))
-    return exp_x / np.sum(exp_x, axis=1, keepdims=True)
-
-# Forward pass of the neural network
-def forward_pass(X, weights_1, biases_1, weights_2, biases_2, weights_3, biases_3):
-    hidden_layer_1 = leaky_relu(np.dot(X, weights_1) + biases_1)
-    hidden_layer_2 = leaky_relu(np.dot(hidden_layer_1, weights_2) + biases_2)
-    output_layer = softmax(np.dot(hidden_layer_2, weights_3) + biases_3)
-    return hidden_layer_1, hidden_layer_2, output_layer
+# Load the trained k-NN model
+model_filename = "knn_model.xml"
+knn = cv2.ml.KNearest_load(model_filename)
 
 # Function to process the image
 def process_image(image_file):
@@ -102,13 +77,11 @@ def predict():
         # Process the image and get the processed image for prediction
         processed_img, processed_img_for_prediction = process_image(file)
 
-        # Reshape the image and make prediction using MLP
+        # Reshape and make prediction
         processed_img_for_prediction = processed_img_for_prediction.reshape(1, -1)  # Reshape to match the input shape
-        hidden_layer_1, hidden_layer_2, output_layer = forward_pass(
-            processed_img_for_prediction, weights_1, biases_1, weights_2, biases_2, weights_3, biases_3
-        )
+        ret, results, neighbors, dist = knn.findNearest(processed_img_for_prediction, k=5)
 
-        predicted_digit = int(np.argmax(output_layer, axis=1)[0])
+        predicted_digit = int(results[0][0])
 
         # Convert the processed image to a base64 encoded string (2D image, not the flattened 1D array)
         _, buffer = cv2.imencode('.png', processed_img)  # Use the original processed image here
