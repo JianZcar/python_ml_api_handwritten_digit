@@ -3,7 +3,6 @@ from flask_cors import CORS
 import cv2
 import numpy as np
 import base64
-import os
 
 # Initialize Flask app
 app = Flask(__name__)
